@@ -68,7 +68,6 @@ def test_frozen_matches_unfrozen():
     expected = responses()
     schema = app.openapi()
     app.freeze_routes()
-    app.freeze_routes()
     with (
         patch.object(
             APIRouter,
@@ -88,6 +87,23 @@ def test_frozen_matches_unfrozen():
         )
     app.openapi_schema = None
     assert app.openapi() == schema
+
+
+def test_freeze_routes_is_idempotent():
+    app, _ = make_app()
+    app.freeze_routes()
+    contexts = list(iter_route_contexts(app.routes))
+
+    app.freeze_routes()
+
+    assert all(
+        before._effective_route is after._effective_route
+        for before, after in zip(contexts, iter_route_contexts(app.routes), strict=True)
+    )
+    assert TestClient(app).get("/api/v1/acme/typed/42").json() == {
+        "name": "int",
+        "params": {"tenant": "acme", "value": 42},
+    }
 
 
 @pytest.mark.parametrize(

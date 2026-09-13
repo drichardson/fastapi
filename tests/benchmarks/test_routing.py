@@ -39,6 +39,7 @@ def create_app(frozen: bool) -> FastAPI:
     return app
 
 
+@pytest.mark.timeout(60)
 @pytest.mark.parametrize("frozen", [False, True], ids=["dynamic", "frozen"])
 @pytest.mark.parametrize(
     "path,status",
@@ -62,30 +63,30 @@ def test_nested_routing(benchmark, frozen: bool, path: str, status: int) -> None
         async def receive():
             return {"type": "http.request", "body": b""}
 
-        for _ in range(100):
-            await app(
-                {
-                    "type": "http",
-                    "method": "GET",
-                    "path": path,
-                    "root_path": "",
-                    "scheme": "http",
-                    "query_string": b"",
-                    "headers": [],
-                    "server": ("testserver", 80),
-                },
-                receive,
-                send,
-            )
+        await app(
+            {
+                "type": "http",
+                "method": "GET",
+                "path": path,
+                "root_path": "",
+                "scheme": "http",
+                "query_string": b"",
+                "headers": [],
+                "server": ("testserver", 80),
+            },
+            receive,
+            send,
+        )
         return actual_status
 
     loop = asyncio.new_event_loop()
     try:
 
-        def run_batch():
+        def run_request():
             return loop.run_until_complete(run())
 
-        assert run_batch() == status
-        assert benchmark(run_batch) == status
+        # Initialize middleware and lazy route contexts outside the measurement.
+        assert run_request() == status
+        assert benchmark(run_request) == status
     finally:
         loop.close()
