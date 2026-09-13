@@ -1162,6 +1162,17 @@ class FastAPI(Starlette):
             scope["root_path"] = self.root_path
         await super().__call__(scope, receive, send)
 
+    def freeze_routes(self) -> None:
+        """Finalize routing indexes after registering all routes and mounts.
+
+        Call once before serving requests, or at the end of lifespan startup.
+        Included routers and directly mounted FastAPI applications are frozen too.
+        Further route registration raises FastAPIError. Direct changes to route
+        lists, route metadata or matching hooks are unsupported after freezing.
+        Dependency overrides and request path parameter values can still change.
+        """
+        self.router.freeze_routes()
+
     def add_api_route(
         self,
         path: str,
