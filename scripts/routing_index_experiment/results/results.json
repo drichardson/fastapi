@@ -1,0 +1,271 @@
+{
+  "environment": "macOS-26.6.2-arm64-arm-64bit",
+  "python": "3.11.13 (main, Jun 12 2025, 12:22:50) [Clang 20.1.4 ]",
+  "compiler": "Apple clang version 21.0.0 (clang-2100.0.123.102)\nTarget: arm64-apple-darwin25.6.0\nThread model: posix\nInstalledDir: /Applications/Xcode_26.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin\n",
+  "compile_command": [
+    "cc",
+    "-O3",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-shared",
+    "-fPIC",
+    "/Users/doug/code/fastapi/scripts/routing_index_experiment/native.c",
+    "-o",
+    "/Users/doug/code/fastapi/scripts/routing_index_experiment/results/packed.dylib"
+  ],
+  "results": [
+    {
+      "layout": "packed",
+      "shape": "overlap",
+      "finalize_ms": 162.31633303686976,
+      "request_us": [
+        37.13229,
+        36.288335,
+        36.18396,
+        35.957705000000004,
+        36.289375,
+        35.645835,
+        35.550625
+      ],
+      "request_median_us": 36.18396,
+      "lookup_us": [
+        3.89359375,
+        3.761875,
+        3.7459895833333334,
+        3.819514166666667,
+        3.7802258333333336,
+        3.8255729166666663,
+        4.36045125
+      ],
+      "lookup_median_us": 3.819514166666667,
+      "retained_bytes": 122672,
+      "peak_bytes": 131641,
+      "packed_bytes": 30248
+    },
+    {
+      "layout": "packed",
+      "shape": "fallback",
+      "finalize_ms": 149.72141687758267,
+      "request_us": [
+        103.356875,
+        102.86396,
+        101.29728999999999,
+        102.95208,
+        100.41833500000001,
+        99.88729,
+        98.70542
+      ],
+      "request_median_us": 101.29728999999999,
+      "lookup_us": [
+        2.1692883333333333,
+        2.14783,
+        2.1454341666666665,
+        2.20828125,
+        2.1302258333333333,
+        2.13888875,
+        2.1906945833333333
+      ],
+      "lookup_median_us": 2.14783,
+      "retained_bytes": 105152,
+      "peak_bytes": 110616,
+      "packed_bytes": 13088
+    },
+    {
+      "layout": "native",
+      "shape": "distinct",
+      "finalize_ms": 170.93074996955693,
+      "request_us": [
+        26.40208,
+        24.95125,
+        25.373955000000002,
+        25.09,
+        24.83604,
+        24.934165,
+        25.89875
+      ],
+      "request_median_us": 25.09,
+      "lookup_us": [
+        0.8460241666666667,
+        0.8299829166666667,
+        0.8517362500000001,
+        0.84,
+        0.8221704166666667,
+        0.8408162499999999,
+        0.8263716666666666
+      ],
+      "lookup_median_us": 0.84,
+      "retained_bytes": 287760,
+      "peak_bytes": 351836,
+      "packed_bytes": 183048
+    },
+    {
+      "layout": "object",
+      "shape": "fallback",
+      "finalize_ms": 144.24533396959305,
+      "request_us": [
+        101.225205,
+        98.34646000000001,
+        96.473125,
+        97.333335,
+        97.659375,
+        96.44792,
+        96.805835
+      ],
+      "request_median_us": 97.333335,
+      "lookup_us": [
+        1.80204875,
+        1.75232625,
+        1.79293375,
+        1.7440970833333334,
+        1.7755554166666665,
+        1.7158504166666666,
+        1.7423087499999999
+      ],
+      "lookup_median_us": 1.75232625,
+      "retained_bytes": 68520,
+      "peak_bytes": 70032,
+      "packed_bytes": null
+    },
+    {
+      "layout": "native",
+      "shape": "overlap",
+      "finalize_ms": 171.3105000089854,
+      "request_us": [
+        25.837085,
+        25.950834999999998,
+        25.352919999999997,
+        25.38875,
+        25.95708,
+        25.19625,
+        25.53875
+      ],
+      "request_median_us": 25.53875,
+      "lookup_us": [
+        2.3214929166666667,
+        2.28923625,
+        2.35953125,
+        2.3370658333333334,
+        2.28862875,
+        2.2861458333333333,
+        2.3102604166666665
+      ],
+      "lookup_median_us": 2.3102604166666665,
+      "retained_bytes": 134840,
+      "peak_bytes": 143681,
+      "packed_bytes": 30248
+    },
+    {
+      "layout": "object",
+      "shape": "overlap",
+      "finalize_ms": 166.88612499274313,
+      "request_us": [
+        26.927294999999997,
+        26.79,
+        26.431875,
+        26.831875,
+        27.13708,
+        25.634165,
+        25.375415
+      ],
+      "request_median_us": 26.79,
+      "lookup_us": [
+        2.2827083333333333,
+        2.3571354166666665,
+        2.3200695833333334,
+        2.304375,
+        2.34092,
+        2.3491666666666666,
+        2.3121183333333333
+      ],
+      "lookup_median_us": 2.3200695833333334,
+      "retained_bytes": 269176,
+      "peak_bytes": 271667,
+      "packed_bytes": null
+    },
+    {
+      "layout": "object",
+      "shape": "distinct",
+      "finalize_ms": 185.18587504513562,
+      "request_us": [
+        27.36396,
+        25.81229,
+        24.38708,
+        25.723544999999998,
+        25.59271,
+        25.94125,
+        26.6075
+      ],
+      "request_median_us": 25.81229,
+      "lookup_us": [
+        0.7477604166666666,
+        0.73921875,
+        0.7415275,
+        0.7522916666666666,
+        0.7436808333333333,
+        0.7366320833333333,
+        0.7666666666666666
+      ],
+      "lookup_median_us": 0.7436808333333333,
+      "retained_bytes": 1825504,
+      "peak_bytes": 1827549,
+      "packed_bytes": null
+    },
+    {
+      "layout": "native",
+      "shape": "fallback",
+      "finalize_ms": 119.75987511686981,
+      "request_us": [
+        105.070415,
+        101.53979,
+        100.26708,
+        101.01521000000001,
+        100.180625,
+        100.3225,
+        99.9575
+      ],
+      "request_median_us": 100.3225,
+      "lookup_us": [
+        2.64611125,
+        2.5769791666666664,
+        2.4369270833333334,
+        2.68609375,
+        2.5942012500000002,
+        2.5618229166666664,
+        2.34892375
+      ],
+      "lookup_median_us": 2.5769791666666664,
+      "retained_bytes": 117320,
+      "peak_bytes": 122656,
+      "packed_bytes": 13088
+    },
+    {
+      "layout": "packed",
+      "shape": "distinct",
+      "finalize_ms": 175.65933289006352,
+      "request_us": [
+        47.764585,
+        46.591045,
+        46.645625,
+        44.967295,
+        47.43875,
+        46.140834999999996,
+        47.70375
+      ],
+      "request_median_us": 46.645625,
+      "lookup_us": [
+        6.608367916666667,
+        6.578229166666667,
+        6.56533,
+        6.592725416666667,
+        6.580555416666667,
+        6.57703125,
+        6.5793575
+      ],
+      "lookup_median_us": 6.5793575,
+      "retained_bytes": 275592,
+      "peak_bytes": 340100,
+      "packed_bytes": 183048
+    }
+  ]
+}
