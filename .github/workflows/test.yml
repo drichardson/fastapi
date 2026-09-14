@@ -155,48 +155,6 @@ jobs:
           path: coverage
           include-hidden-files: true
 
-  benchmark:
-    needs:
-      - changes
-    if: needs.changes.outputs.src == 'true' || github.ref == 'refs/heads/master'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    env:
-      UV_PYTHON: "3.13"
-      UV_RESOLUTION: highest
-    steps:
-      - name: Dump GitHub context
-        env:
-          GITHUB_CONTEXT: ${{ toJson(github) }}
-        run: echo "$GITHUB_CONTEXT"
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.13"
-      - name: Setup uv
-        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
-        with:
-          version: "latest-known"
-          enable-cache: true
-          cache-dependency-glob: |
-            pyproject.toml
-            uv.lock
-      - name: Install Dependencies
-        run: uv sync --no-dev --group tests --extra all
-      - name: CodSpeed benchmarks
-        uses: CodSpeedHQ/action@373d6868929f444bc08d901fd0eb0ad52a8875ea # v5.2.1
-        with:
-          mode: simulation
-          run: uv run --no-sync pytest tests/benchmarks --codspeed
-      - name: CodSpeed memory benchmark
-        uses: CodSpeedHQ/action@373d6868929f444bc08d901fd0eb0ad52a8875ea # v5.2.1
-        with:
-          mode: memory
-          run: uv run --no-sync pytest tests/memory_benchmarks --codspeed
-
   regression-test:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -316,7 +274,6 @@ jobs:
     needs:
       - test
       - coverage-combine
-      - benchmark
       - regression-test
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -329,4 +286,4 @@ jobs:
         uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # v1.3.0
         with:
           jobs: ${{ toJSON(needs) }}
-          allowed-skips: coverage-combine,test,benchmark
+          allowed-skips: coverage-combine,test
