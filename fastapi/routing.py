@@ -6,6 +6,7 @@ import functools
 import inspect
 import json
 import os
+import re
 import stat
 import threading
 import types
@@ -92,6 +93,12 @@ from starlette import routing
 from starlette._exception_handler import wrap_app_handling_exceptions
 from starlette._utils import get_route_path, is_async_callable
 from starlette.concurrency import iterate_in_threadpool, run_in_threadpool
+from starlette.convertors import (
+    FloatConvertor,
+    IntegerConvertor,
+    StringConvertor,
+    UUIDConvertor,
+)
 from starlette.datastructures import URL, FormData, URLPath
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
@@ -1583,6 +1590,92 @@ class RouteContext:
 
 
 @dataclass
+class _RouteIndexNode:
+    children: dict[str | None, "_RouteIndexNode"] = field(default_factory=dict)
+    fallback: list[int] = field(default_factory=list)
+    terminal: list[int] = field(default_factory=list)
+
+
+class _FrozenRouteIndex:
+    """Filter candidates without changing first-match registration precedence."""
+
+    def __init__(
+        self, candidates: Sequence["_EffectiveRouteContext | _IncludedRouter"]
+    ) -> None:
+        self.candidates = tuple(candidates)
+        self.root = _RouteIndexNode()
+        for ordinal, candidate in enumerate(candidates):
+            node = self.root
+            if (
+                not isinstance(candidate, _EffectiveRouteContext)
+                or not _is_standard_api_route(candidate.original_route)
+                or any(
+                    type(c)
+                    not in (
+                        StringConvertor,
+                        IntegerConvertor,
+                        FloatConvertor,
+                        UUIDConvertor,
+                    )
+                    for c in candidate.param_convertors.values()
+                )
+            ):
+                node.fallback.append(ordinal)
+                continue
+            for segment in candidate.path.split("/"):
+                key: str | None = segment
+                if "{" in segment:
+                    # Arbitrary converters may consume slashes, as may path.
+                    # Partial-segment parameters also stay on the fallback path.
+                    if not re.fullmatch(
+                        r"\{\w+(?::(?:str|int|float|uuid))?\}", segment
+                    ):
+                        node.fallback.append(ordinal)
+                        break
+                    key = None
+                node = node.children.setdefault(key, _RouteIndexNode())
+            else:
+                node.terminal.append(ordinal)
+
+    def select(self, path: str) -> Iterator["_EffectiveRouteContext | _IncludedRouter"]:
+        nodes = [self.root]
+        ordinals: list[int] = []
+        for segment in path.split("/"):
+            next_nodes = []
+            for node in nodes:
+                ordinals.extend(node.fallback)
+                for key in (segment, None):
+                    child = node.children.get(key)
+                    if child is not None:
+                        next_nodes.append(child)
+            nodes = next_nodes
+        for node in nodes:
+            ordinals.extend(node.fallback)
+            ordinals.extend(node.terminal)
+        for ordinal in sorted(ordinals):
+            yield self.candidates[ordinal]
+
+
+def _is_standard_api_route(route: BaseRoute) -> bool:
+    return type(route) is APIRoute and "matches" not in vars(route)
+
+
+def _has_standard_route_tree(router: "APIRouter") -> bool:
+    return (
+        type(router) is APIRouter
+        and "matches" not in vars(router)
+        and all(
+            (
+                _has_standard_route_tree(route.original_router)
+                if isinstance(route, _IncludedRouter)
+                else _is_standard_api_route(route)
+            )
+            for route in router.routes
+        )
+    )
+
+
+@dataclass
 class _IncludedRouter(BaseRoute):
     original_router: "APIRouter"
     include_context: _RouterIncludeContext
@@ -1597,8 +1690,25 @@ class _IncludedRouter(BaseRoute):
         default_factory=list
     )
     _effective_low_priority_routes_version: int | None = None
+    _frozen_index: _FrozenRouteIndex | None = field(default=None, repr=False)
+    _frozen_prefix: re.Pattern[str] | None = field(default=None, repr=False)
+
+    def _freeze(self) -> None:
+        if self._frozen_index is not None:
+            return
+        candidates = self.effective_candidates()
+        self.effective_low_priority_routes()
+        for candidate in candidates:
+            if isinstance(candidate, _IncludedRouter):
+                candidate._freeze()
+        if _has_standard_route_tree(self.original_router):
+            pattern = compile_path(self.include_context.prefix)[0].pattern
+            self._frozen_prefix = re.compile(pattern.removesuffix("$"))
+        self._frozen_index = _FrozenRouteIndex(candidates)
 
     def effective_candidates(self) -> list["_EffectiveRouteContext | _IncludedRouter"]:
+        if self._frozen_index is not None:
+            return self._effective_candidates
         routes_version = self.original_router._get_routes_version()
         if routes_version == self._effective_candidates_version:
             return self._effective_candidates
@@ -1624,6 +1734,8 @@ class _IncludedRouter(BaseRoute):
             return effective_candidates
 
     def effective_low_priority_routes(self) -> list["_EffectiveRouteContext"]:
+        if self._frozen_index is not None:
+            return self._effective_low_priority_routes
         routes_version = self.original_router._get_routes_version()
         if routes_version == self._effective_low_priority_routes_version:
             return self._effective_low_priority_routes
@@ -1729,11 +1841,24 @@ class _IncludedRouter(BaseRoute):
         self, scope: Scope
     ) -> tuple[Match, Scope, BaseRoute | None, _EffectiveRouteContext | None]:
         partial: tuple[Scope, BaseRoute, _EffectiveRouteContext | None] | None = None
-        for candidate in self.effective_candidates():
+        candidates = (
+            self._frozen_index.select(get_route_path(scope))
+            if self._frozen_index is not None and scope["type"] == "http"
+            else self.effective_candidates()
+        )
+        for candidate in candidates:
             if isinstance(candidate, _IncludedRouter):
                 match, child_scope = candidate.matches(scope)
                 route: BaseRoute = candidate
                 route_context = None
+            elif self._frozen_index is not None and _is_standard_api_route(
+                candidate.original_route
+            ):
+                route_context = candidate
+                match, child_scope = candidate.matches(scope)
+                route = candidate.original_route
+                if match != Match.NONE:
+                    child_scope["route"] = route
             elif isinstance(candidate.original_route, APIRoute):
                 route_context = candidate
                 fastapi_scope = _get_fastapi_scope(scope)
@@ -1762,6 +1887,12 @@ class _IncludedRouter(BaseRoute):
         return Match.NONE, {}, None, None
 
     def matches(self, scope: Scope) -> tuple[Match, Scope]:
+        if (
+            self._frozen_prefix is not None
+            and scope["type"] == "http"
+            and not self._frozen_prefix.match(get_route_path(scope))
+        ):
+            return Match.NONE, {}
         fastapi_scope = _get_fastapi_scope(scope)
         previous_router = fastapi_scope.get(
             _FASTAPI_INCLUDED_ROUTER_KEY, _SCOPE_MISSING
@@ -2564,11 +2695,62 @@ class APIRouter(routing.Router):
         self.generate_unique_id_function = generate_unique_id_function
         self.strict_content_type = strict_content_type
         self._routes_version = 0
+        self._routes_frozen = False
         self._low_priority_routes: list[BaseRoute] = []
         self._frontend_routes: _FrontendRouteGroup | None = None
 
     def _mark_routes_changed(self) -> None:
         self._routes_version += 1
+
+    def _check_routes_mutable(self) -> None:
+        if self._routes_frozen:
+            raise FastAPIError(
+                "Routes are frozen. Register routes before freeze_routes()."
+            )
+
+    def freeze_routes(self) -> None:
+        """Compile included-route indexes after registration, before serving requests.
+
+        Includes and mounted APIRouters/FastAPI applications are finalized too.
+        This operation is idempotent. Route definitions, ordering, prefixes and
+        matching hooks must remain unchanged afterwards, including on shared routers.
+        Direct edits to route lists or route metadata are not supported.
+        """
+        if self._routes_frozen:
+            return
+        routers: list[APIRouter] = []
+        seen: set[int] = set()
+
+        def collect(router: APIRouter) -> None:
+            if id(router) in seen:
+                return
+            seen.add(id(router))
+            routers.append(router)
+            for route in router.routes:
+                if isinstance(route, _IncludedRouter):
+                    collect(route.original_router)
+                elif isinstance(route, (routing.Mount, routing.Host)):
+                    child = getattr(route.app, "router", route.app)
+                    if isinstance(child, APIRouter):
+                        collect(child)
+
+        collect(self)
+        for router in routers:
+            for route in router.routes:
+                if isinstance(route, _IncludedRouter):
+                    route._freeze()
+        for router in routers:
+            router._routes_frozen = True
+
+    def mount(self, path: str, app: ASGIApp, name: str | None = None) -> None:
+        self._check_routes_mutable()
+        super().mount(path, app, name=name)
+        self._mark_routes_changed()
+
+    def host(self, host: str, app: ASGIApp, name: str | None = None) -> None:
+        self._check_routes_mutable()
+        super().host(host, app, name=name)
+        self._mark_routes_changed()
 
     def _get_routes_version(self, seen: set[int] | None = None) -> int:
         if seen is None:
@@ -2609,6 +2791,7 @@ class APIRouter(routing.Router):
         name: str | None = None,
         include_in_schema: bool = True,
     ) -> None:
+        self._check_routes_mutable()
         super().add_route(
             path,
             endpoint,
@@ -2624,6 +2807,7 @@ class APIRouter(routing.Router):
         endpoint: Callable[[WebSocket], Awaitable[None]],
         name: str | None = None,
     ) -> None:
+        self._check_routes_mutable()
         super().add_websocket_route(path, endpoint, name=name)
         self._mark_routes_changed()
 
@@ -2698,6 +2882,7 @@ class APIRouter(routing.Router):
         app.include_router(router)
         ```
         """
+        self._check_routes_mutable()
         check_dir = _resolve_frontend_check_dir(
             directory=directory, check_dir=check_dir
         )
@@ -2918,6 +3103,7 @@ class APIRouter(routing.Router):
         | DefaultPlaceholder = Default(generate_unique_id),
         strict_content_type: bool | DefaultPlaceholder = Default(True),
     ) -> None:
+        self._check_routes_mutable()
         route_class = route_class_override or self.route_class
         responses = responses or {}
         combined_responses = {**self.responses, **responses}
@@ -3040,6 +3226,7 @@ class APIRouter(routing.Router):
         *,
         dependencies: Sequence[params.Depends] | None = None,
     ) -> None:
+        self._check_routes_mutable()
         current_dependencies = self.dependencies.copy()
         if dependencies:
             current_dependencies.extend(dependencies)
@@ -3265,6 +3452,7 @@ class APIRouter(routing.Router):
         app.include_router(internal_router)
         ```
         """
+        self._check_routes_mutable()
         assert self is not router, (
             "Cannot include the same APIRouter instance into itself. "
             "Did you mean to include a different router?"
